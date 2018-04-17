@@ -29,74 +29,26 @@
 
 typedef unsigned char MacAddress[MAC_ADDR_LEN];
 extern int errno;
+char ifName[IFNAMSIZ];
 
-void enviaIP4eUDP() {
-  printf("\n\nEntrou no IPv4 e UDP\n\n");
-}
+void configuraPacote(int opcao) {
 
-void enviaIP4eTCP() {
-  printf("\n\nEntrou no IPv4 e TCP\n\n");
-}
-
-void enviaIP6eUDP() {
-  printf("\n\nEntrou no IPv6 e UDP\n\n");
-}
-
-void enviaIP6eTCP() {
-  printf("\n\nEntrou no IPv6 e TCP\n\n");
-}
-
-int main(int argc, char*argv[])
-{
   struct ifreq if_idx;
   struct ifreq if_mac;
-  struct ifreq if_ip;
-
-  char ifName[IFNAMSIZ];
-  int tx_len = 0;
   char sendbuf[1024];
-  struct ether_header *eh = (struct ether_header *) sendbuf;
   int sockFd = 0, retValue = 0;
-  char buffer[BUFFER_LEN], dummyBuf[50];
+  int tx_len = 0;
+  struct ether_header *eh = (struct ether_header *) sendbuf;
   struct sockaddr_ll socket_address;
-  short int etherTypeT = htons(0x8200);
-  MacAddress destMac;
-  struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
-  int escolha = 1;
 
-  if(argc > 1) {
-    strcpy(ifName, argv[1]);
+  if(opcao == 1) {
+    printf("\n\nEntrou no IPv4 e UDP\n\n");
+  } else if(opcao == 2) {
+    printf("\n\nEntrou no IPv4 e TCP\n\n");
+  } else if(opcao == 3) {
+    printf("\n\nEntrou no IPv6 e UDP\n\n");
   } else {
-    strcpy(ifName, DEFAULT_IF);
-    printf("Utilizando interface padrão eth0!\n\n");
-  }
-
-  while(escolha!=5) {
-    printf("\n ################################################### ");
-    printf("\nTrabalho 1 LAB-REDES");
-    printf("\n 1 - Enviar utilizando IPv4 e UDP ");
-    printf("\n 2 - Enviar utilizando IPv4 e TCP ");
-    printf("\n 3 - Enviar utilizando IPv6 e UDP ");
-    printf("\n 4 - Enviar utilizando IPv6 e TCP ");
-    printf("\n 5 - Fechar Programa ");
-    printf("\n\n Escolha uma opcao: ");
-    scanf("%d",&escolha);
-
-    switch(escolha) {
-        case 1: enviaIP4eUDP();
-                break;
-        case 2: enviaIP4eTCP();
-                break;
-        case 3: enviaIP6eUDP();
-                break;
-        case 4: enviaIP6eTCP();
-                break;
-        case 5: printf("\nFinalizando ferramenta...\n\n");
-                exit(0);
-        default: printf("\nOpção inválida!..\n\n");
-                break;
-    }
-
+    printf("\n\nEntrou no IPv6 e TCP\n\n");
   }
 
   /* Criacao do socket. Todos os pacotes devem ser construidos a partir do protocolo Ethernet. */
@@ -120,10 +72,10 @@ int main(int argc, char*argv[])
     perror("SIOCGIFHWADDR");
 
   // Pega o endereço IP da interface
-  memset(&if_ip, 0, sizeof(struct ifreq));
-  strncpy(if_ip.ifr_name, ifName, IFNAMSIZ-1);
-  if(ioctl(sockFd, SIOCGIFADDR, &if_ip) < 0)
-    perror("SIOCGIFADDR");
+  //memset(&if_ip, 0, sizeof(struct ifreq));
+  //strncpy(if_ip.ifr_name, ifName, IFNAMSIZ-1);
+  //if(ioctl(sockFd, SIOCGIFADDR, &if_ip) < 0)
+  //  perror("SIOCGIFADDR");
 
   memset(sendbuf, 0, 1024);
 
@@ -183,5 +135,44 @@ int main(int argc, char*argv[])
     printf("Send success (%d).\n", retValue);
     i++;
   }
+}
 
+int main(int argc, char*argv[])
+{
+  int escolha = 1;
+
+  if(argc > 1) {
+    strcpy(ifName, argv[1]);
+  } else {
+    strcpy(ifName, DEFAULT_IF);
+    printf("Utilizando interface padrão eth0!\n\n");
+  }
+
+  while(escolha!=5) {
+    printf("\n ################################################### ");
+    printf("\nTrabalho 1 LAB-REDES");
+    printf("\n 1 - Enviar utilizando IPv4 e UDP ");
+    printf("\n 2 - Enviar utilizando IPv4 e TCP ");
+    printf("\n 3 - Enviar utilizando IPv6 e UDP ");
+    printf("\n 4 - Enviar utilizando IPv6 e TCP ");
+    printf("\n 5 - Fechar Programa ");
+    printf("\n\n Escolha uma opcao: ");
+    scanf("%d",&escolha);
+
+    switch(escolha) {
+        case 1: configuraPacote(1);
+                break;
+        case 2: configuraPacote(2);
+                break;
+        case 3: configuraPacote(3);
+                break;
+        case 4: configuraPacote(4);
+                break;
+        case 5: printf("\nFinalizando ferramenta...\n\n");
+                exit(0);
+        default: printf("\nOpção inválida!..\n\n");
+                break;
+    }
+
+  }
 }
