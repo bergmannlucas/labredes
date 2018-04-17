@@ -30,20 +30,20 @@ void monta_pacote()
 	eth = (struct ether_header *) &buff[0];
 
 	//Endereco Mac Destino
-	eth->ether_dhost[0] = 0X00;
-	eth->ether_dhost[1] = 0X06;
-	eth->ether_dhost[2] = 0X5B;
-	eth->ether_dhost[3] = 0X28;
-	eth->ether_dhost[4] = 0XAE;
-	eth->ether_dhost[5] = 0X73;
+	eth->ether_dhost[0] = 0X70;
+	eth->ether_dhost[1] = 0X8b;
+	eth->ether_dhost[2] = 0Xcd;
+	eth->ether_dhost[3] = 0Xe5;
+	eth->ether_dhost[4] = 0X5d;
+	eth->ether_dhost[5] = 0X32;
 
 	//Endereco Mac Origem
-	eth->ether_shost[0] = 0X00;
-	eth->ether_shost[1] = 0X08;
-	eth->ether_shost[2] = 0X74;
-	eth->ether_shost[3] = 0XB5;
-	eth->ether_shost[4] = 0XB5;
-	eth->ether_shost[5] = 0X8E;
+	eth->ether_shost[0] = 0X70;
+	eth->ether_shost[1] = 0X8b;
+	eth->ether_shost[2] = 0Xcd;
+	eth->ether_shost[3] = 0Xe5;
+	eth->ether_shost[4] = 0X5d;
+	eth->ether_shost[5] = 0X32;
 
  	eth->ether_type = htons(0X800);
 }
