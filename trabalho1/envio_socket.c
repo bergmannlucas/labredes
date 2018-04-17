@@ -17,18 +17,34 @@
 #define BUFFER_LEN 1518
 
 #define DEFAULT_IF "eth0" // interface padrao se n for passada por parametro
-#define MY_DEST_MAC0 0x70
-#define MY_DEST_MAC1 0x8b
-#define MY_DEST_MAC2 0xcd
-#define MY_DEST_MAC3 0xe5
-#define MY_DEST_MAC4 0x5d
-#define MY_DEST_MAC5 0x32
+#define MY_DEST_MAC0 0xa4
+#define MY_DEST_MAC1 0x1f
+#define MY_DEST_MAC2 0x72
+#define MY_DEST_MAC3 0xf5
+#define MY_DEST_MAC4 0x90
+#define MY_DEST_MAC5 0x80
 
 // Atencao!! Confira no /usr/include do seu sisop o nome correto
 // das estruturas de dados dos protocolos.
 
 typedef unsigned char MacAddress[MAC_ADDR_LEN];
 extern int errno;
+
+void enviaIP4eUDP() {
+  printf("\n\nEntrou no IPv4 e UDP\n\n");
+}
+
+void enviaIP4eTCP() {
+  printf("\n\nEntrou no IPv4 e TCP\n\n");
+}
+
+void enviaIP6eUDP() {
+  printf("\n\nEntrou no IPv6 e UDP\n\n");
+}
+
+void enviaIP6eTCP() {
+  printf("\n\nEntrou no IPv6 e TCP\n\n");
+}
 
 int main(int argc, char*argv[])
 {
@@ -46,12 +62,41 @@ int main(int argc, char*argv[])
   short int etherTypeT = htons(0x8200);
   MacAddress destMac;
   struct iphdr *iph = (struct iphdr *) (sendbuf + sizeof(struct ether_header));
+  int escolha = 1;
 
   if(argc > 1) {
     strcpy(ifName, argv[1]);
   } else {
     strcpy(ifName, DEFAULT_IF);
     printf("Utilizando interface padrão eth0!\n\n");
+  }
+
+  while(escolha!=5) {
+    printf("\n ################################################### ");
+    printf("\nTrabalho 1 LAB-REDES");
+    printf("\n 1 - Enviar utilizando IPv4 e UDP ");
+    printf("\n 2 - Enviar utilizando IPv4 e TCP ");
+    printf("\n 3 - Enviar utilizando IPv6 e UDP ");
+    printf("\n 4 - Enviar utilizando IPv6 e TCP ");
+    printf("\n 5 - Fechar Programa ");
+    printf("\n\n Escolha uma opcao: ");
+    scanf("%d",&escolha);
+
+    switch(escolha) {
+        case 1: enviaIP4eUDP();
+                break;
+        case 2: enviaIP4eTCP();
+                break;
+        case 3: enviaIP6eUDP();
+                break;
+        case 4: enviaIP6eTCP();
+                break;
+        case 5: printf("\nFinalizando ferramenta...\n\n");
+                exit(0);
+        default: printf("\nOpção inválida!..\n\n");
+                break;
+    }
+
   }
 
   /* Criacao do socket. Todos os pacotes devem ser construidos a partir do protocolo Ethernet. */
@@ -97,19 +142,6 @@ int main(int argc, char*argv[])
   eh->ether_dhost[5] = MY_DEST_MAC5;
   eh->ether_type = htons(ETH_P_IP);
   tx_len += sizeof(struct ether_header);
-
-  // Cabecalho IP
-  iph->ihl = 5;
-  iph->version = 4;
-  iph->tos = 16;
-  iph->id = htons(54321);
-  iph->ttl = ttl; // hops
-  iph->protocol = 17; // UDP
-  // IP Source
-  iph->saddr = inet_addr(inet_ntoa(((struct sockaddr_in *)&if_ip.ifr_addr)->sin_addr));
-  // IP Destination
-  iph->daddr = inet_addr("192.168.0.111");
-  tx_len += sizeof(struct iphdr);
 
 
   // Indice da interface pela qual os pacotes serao enviados
