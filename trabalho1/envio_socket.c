@@ -8,6 +8,10 @@
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 #include <netinet/ether.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <linux/ip.h>
+#include <linux/udp.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <stdint.h>
@@ -30,16 +34,57 @@
 // Atencao!! Confira no /usr/include do seu sisop o nome correto
 // das estruturas de dados dos protocolos.
 
-typedef unsigned char MacAddress[MAC_ADDR_LEN];
-extern int errno;
+//typedef unsigned char MacAddress[MAC_ADDR_LEN];
+//extern int errno;
 char ifName[IFNAMSIZ];
 unsigned char buff[1500];
+struct ifreq ifr;
+
+// Função de checksum
+unsigned short checksum(unsigned short *buf, int nwords)
+{
+    //
+
+    unsigned long sum;
+
+    for(sum=0; nwords>0; nwords--)
+        sum += *buf++;
+
+    sum = (sum >> 16) + (sum &0xffff);
+
+    sum += (sum >> 16);
+
+    return (unsigned short)(~sum);
+}
+
+// Função de checksum para o UDP
+uint16_t check_udp_sum(uint8_t *buffer, int len)
+{
+    unsigned long sum = 0;
+    struct iphdr *tempI = (struct iphdr *)(buff);
+    struct udphdr *tempH = (struct udphdr *)(buff + sizeof(struct iphdr));
+    //struct dnsheader *tempD = (struct dnsheader *)(buff + sizeof(struct iphdr) + sizeof(struct udphdr));
+    tempH->check = 0;
+    sum = checksum( (uint16_t *)   & (tempI->saddr) , 8 );
+    sum += checksum((uint16_t *) tempH, len);
+
+    sum += ntohs(IPPROTO_UDP + len);
+
+
+    sum = (sum >> 16) + (sum & 0x0000ffff);
+    sum += (sum >> 16);
+
+    return (uint16_t)(~sum);
+
+}
 
 void monta_pacote(int opcao) {
   // as struct estao descritas nos seus arquivos .h
   // por exemplo a ether_header esta no net/ethert.h
   // a struct ip esta descrita no netinet/ip.h
   struct ether_header *eth;
+  struct iphdr *ipv4;
+  struct udphdr *udp;
 
   // coloca o ponteiro do header ethernet apontando para a 1a. posicao do buffer
   // onde inicia o header do ethernet.
@@ -64,7 +109,30 @@ void monta_pacote(int opcao) {
   eth->ether_type = htons(0X800);
 
   if(opcao == 1) {
-    printf("\n\nEntrou no IPv4 e UDP\n\n");
+    // coloca o ponteiro do header ip apontando para a 14. posicao do buffer
+    // onde inicia o header do ip.
+    ipv4 = (struct iphdr*)&buff[14];
+
+    ipv4->version = 4;
+    ipv4->ihl = 5; // IPv4
+    ipv4->tos = 0;
+    unsigned short int packetLength = (sizeof(struct iphdr) + sizeof(struct udphdr)); // length + dataEnd_size == UDP_payload_size
+    ipv4->tot_len = htons(packetLength); // Tá errado
+    ipv4->id = htons(rand());
+    ipv4->ttl = 110;
+    ipv4->protocol = 17; // UDP
+    ipv4->saddr = inet_addr(inet_ntoa((((struct sockaddr_in *)&(ifr.ifr_addr))->sin_addr))); // IP ORIGEM
+    ipv4->daddr = inet_addr(inet_ntoa((((struct sockaddr_in *)&(ifr.ifr_addr))->sin_addr))); // IP DESTINO
+
+    // coloca o ponteiro do header udp apontando para a 34. posicao do buffer
+    // onde inicia o header do udp.
+    udp = (struct udphdr *) &buff[34];
+    udp->source = htons(53);
+    udp->dest = htons(33333);
+    udp->len = htons(packetLength); // Tá errado
+
+    ipv4->check = checksum((unsigned short*)(buff + sizeof(struct ether_header)), (sizeof(struct iphdr)/2));
+    udp->check = check_udp_sum(buff, packetLength - sizeof(struct iphdr));
 
   } else if(opcao == 2) {
     printf("\n\nEntrou no IPv4 e TCP\n\n");
@@ -79,7 +147,6 @@ void monta_pacote(int opcao) {
 int main(int argc, char*argv[])
 {
   int sock, i;
-  struct ifreq ifr;
   struct sockaddr_ll to;
   socklen_t len;
   unsigned char addr[6];
@@ -112,12 +179,13 @@ int main(int argc, char*argv[])
   /* Identicacao de qual maquina (MAC) deve receber a mensagem enviada no socket. */
 	to.sll_protocol= htons(ETH_P_ALL);
 	to.sll_ifindex = ifr.ifr_ifindex; /* indice da interface pela qual os pacotes serao enviados */
-	addr[0]=0x00;
-	addr[0]=0x06;
-	addr[0]=0x5B;
-	addr[0]=0x28;
-	addr[0]=0xAE;
-	addr[0]=0x73;
+  //to.sll_halen = 6;
+	addr[0]=MY_DEST_MAC0;
+	addr[0]=MY_DEST_MAC1;
+	addr[0]=MY_DEST_MAC2;
+	addr[0]=MY_DEST_MAC3;
+	addr[0]=MY_DEST_MAC4;
+	addr[0]=MY_DEST_MAC5;
 	memcpy (to.sll_addr, addr, 6);
 	len = sizeof(struct sockaddr_ll);
 
