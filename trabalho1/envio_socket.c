@@ -17,12 +17,15 @@
 #define BUFFER_LEN 1518
 
 #define DEFAULT_IF "eth0" // interface padrao se n for passada por parametro
-#define MY_DEST_MAC0 0xa4
-#define MY_DEST_MAC1 0x1f
-#define MY_DEST_MAC2 0x72
-#define MY_DEST_MAC3 0xf5
-#define MY_DEST_MAC4 0x90
-#define MY_DEST_MAC5 0x80
+#define MY_DEST_MAC0 0x70
+#define MY_DEST_MAC1 0x8b
+#define MY_DEST_MAC2 0xcd
+#define MY_DEST_MAC3 0xe5
+#define MY_DEST_MAC4 0x5d
+#define MY_DEST_MAC5 0x32
+
+// para filtrar no wireshark
+// eth.dst == 70:8b:cd:e5:5d:32 and eth.src == 70:8b:cd:e5:5d:32
 
 // Atencao!! Confira no /usr/include do seu sisop o nome correto
 // das estruturas de dados dos protocolos.
@@ -30,19 +33,39 @@
 typedef unsigned char MacAddress[MAC_ADDR_LEN];
 extern int errno;
 char ifName[IFNAMSIZ];
+unsigned char buff[1500];
 
-void configuraPacote(int opcao) {
+void monta_pacote(int opcao) {
+  // as struct estao descritas nos seus arquivos .h
+  // por exemplo a ether_header esta no net/ethert.h
+  // a struct ip esta descrita no netinet/ip.h
+  struct ether_header *eth;
 
-  struct ifreq if_idx;
-  struct ifreq if_mac;
-  char sendbuf[1024];
-  int sockFd = 0, retValue = 0;
-  int tx_len = 0;
-  struct ether_header *eh = (struct ether_header *) sendbuf;
-  struct sockaddr_ll socket_address;
+  // coloca o ponteiro do header ethernet apontando para a 1a. posicao do buffer
+  // onde inicia o header do ethernet.
+  eth = (struct ether_header *) &buff[0];
+
+  //Endereco Mac Destino
+  eth->ether_dhost[0] = MY_DEST_MAC0;
+  eth->ether_dhost[1] = MY_DEST_MAC1;
+  eth->ether_dhost[2] = MY_DEST_MAC2;
+  eth->ether_dhost[3] = MY_DEST_MAC3;
+  eth->ether_dhost[4] = MY_DEST_MAC4;
+  eth->ether_dhost[5] = MY_DEST_MAC5;
+
+  //Endereco Mac Origem
+  eth->ether_shost[0] = MY_DEST_MAC0;
+  eth->ether_shost[1] = MY_DEST_MAC1;
+  eth->ether_shost[2] = MY_DEST_MAC2;
+  eth->ether_shost[3] = MY_DEST_MAC3;
+  eth->ether_shost[4] = MY_DEST_MAC4;
+  eth->ether_shost[5] = MY_DEST_MAC5;
+
+  eth->ether_type = htons(0X800);
 
   if(opcao == 1) {
     printf("\n\nEntrou no IPv4 e UDP\n\n");
+
   } else if(opcao == 2) {
     printf("\n\nEntrou no IPv4 e TCP\n\n");
   } else if(opcao == 3) {
@@ -51,95 +74,17 @@ void configuraPacote(int opcao) {
     printf("\n\nEntrou no IPv6 e TCP\n\n");
   }
 
-  /* Criacao do socket. Todos os pacotes devem ser construidos a partir do protocolo Ethernet. */
-  /* De um "man" para ver os parametros.*/
-  /* htons: converte um short (2-byte) integer para standard network byte order. */
-  if((sockFd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0) {
-    printf("Erro na criacao do socket.\n");
-    exit(1);
-  }
-
-  // Pega o index da interface
-  memset(&if_idx, 0, sizeof(struct ifreq));
-  strncpy(if_idx.ifr_name, ifName, IFNAMSIZ-1);
-  if(ioctl(sockFd, SIOCGIFINDEX, &if_idx) < 0)
-    perror("SIOCGIFINDEX");
-
-  // Pega o endereço MAC da interface
-  memset(&if_mac, 0, sizeof(struct ifreq));
-  strncpy(if_mac.ifr_name, ifName, IFNAMSIZ-1);
-  if(ioctl(sockFd, SIOCGIFHWADDR, &if_mac) < 0)
-    perror("SIOCGIFHWADDR");
-
-  // Pega o endereço IP da interface
-  //memset(&if_ip, 0, sizeof(struct ifreq));
-  //strncpy(if_ip.ifr_name, ifName, IFNAMSIZ-1);
-  //if(ioctl(sockFd, SIOCGIFADDR, &if_ip) < 0)
-  //  perror("SIOCGIFADDR");
-
-  memset(sendbuf, 0, 1024);
-
-  // Cabecalho Ethernet
-  eh->ether_shost[0] = ((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[0];
-  eh->ether_shost[1] = ((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[1];
-  eh->ether_shost[2] = ((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[2];
-  eh->ether_shost[3] = ((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[3];
-  eh->ether_shost[4] = ((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[4];
-  eh->ether_shost[5] = ((uint8_t *)&if_mac.ifr_hwaddr.sa_data)[5];
-  eh->ether_dhost[0] = MY_DEST_MAC0;
-  eh->ether_dhost[1] = MY_DEST_MAC1;
-  eh->ether_dhost[2] = MY_DEST_MAC2;
-  eh->ether_dhost[3] = MY_DEST_MAC3;
-  eh->ether_dhost[4] = MY_DEST_MAC4;
-  eh->ether_dhost[5] = MY_DEST_MAC5;
-  eh->ether_type = htons(ETH_P_IP);
-  tx_len += sizeof(struct ether_header);
-
-
-  // Indice da interface pela qual os pacotes serao enviados
-  socket_address.sll_ifindex = if_idx.ifr_ifindex;
-  // Address length
-  socket_address.sll_halen = ETH_ALEN;
-  // Mac destino
-  socket_address.sll_addr[0] = MY_DEST_MAC0;
-  socket_address.sll_addr[1] = MY_DEST_MAC1;
-  socket_address.sll_addr[2] = MY_DEST_MAC2;
-  socket_address.sll_addr[3] = MY_DEST_MAC3;
-  socket_address.sll_addr[4] = MY_DEST_MAC4;
-  socket_address.sll_addr[5] = MY_DEST_MAC5;
-
-
-  /*
-  // Identicacao de qual maquina (MAC) deve receber a mensagem enviada no socket.
-  destAddr.sll_family = htons(PF_PACKET);
-  destAddr.sll_protocol = htons(ETH_P_ALL);
-  destAddr.sll_halen = 6;
-  destAddr.sll_ifindex = 2;  // indice da interface pela qual os pacotes serao enviados. Eh necessário conferir este valor.
-  memcpy(&(destAddr.sll_addr), destMac, MAC_ADDR_LEN);
-
-  // Cabecalho Ethernet
-  memcpy(buffer, destMac, MAC_ADDR_LEN);
-  memcpy((buffer+MAC_ADDR_LEN), localMac, MAC_ADDR_LEN);
-  memcpy((buffer+(2*MAC_ADDR_LEN)), &(etherTypeT), sizeof(etherTypeT));
-  */
-  // Add some data
-  //memcpy((sendbuf+ETHERTYPE_LEN+(2*MAC_ADDR_LEN)), dummyBuf, 50);
-
-  int i = 0;
-  while(i < 5) {
-    // Envia pacotes de 64 bytes
-    if((retValue = sendto(sockFd, sendbuf, tx_len, 0, (struct sockaddr *)&(socket_address), sizeof(struct sockaddr_ll))) < 0) {
-       printf("ERROR! sendto() \n");
-       exit(1);
-    }
-    printf("Send success (%d).\n", retValue);
-    i++;
-  }
 }
 
 int main(int argc, char*argv[])
 {
-  int escolha = 1;
+  int sock, i;
+  struct ifreq ifr;
+  struct sockaddr_ll to;
+  socklen_t len;
+  unsigned char addr[6];
+
+  int escolha; // Menu
 
   if(argc > 1) {
     strcpy(ifName, argv[1]);
@@ -147,6 +92,34 @@ int main(int argc, char*argv[])
     strcpy(ifName, DEFAULT_IF);
     printf("Utilizando interface padrão eth0!\n\n");
   }
+
+  // Inicializa com 0 os bytes de memoria apontados por ifr.
+	memset(&ifr, 0, sizeof(ifr));
+
+  // Criacao do socket. Uso do protocolo Ethernet em todos os pacotes. De um "man" para ver os parametros.
+  // htons: converte um short (2-byte) integer para standard network byte order.
+	if((sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0)  {
+    printf("Erro na criacao do socket.\n");
+    exit(1);
+ 	}
+
+  // Pega o index da interface
+  memset(&ifr, 0, sizeof(struct ifreq));
+  strncpy(ifr.ifr_name, ifName, IFNAMSIZ-1);
+  if(ioctl(sock, SIOCGIFINDEX, &ifr) < 0)
+    perror("SIOCGIFINDEX");
+
+  /* Identicacao de qual maquina (MAC) deve receber a mensagem enviada no socket. */
+	to.sll_protocol= htons(ETH_P_ALL);
+	to.sll_ifindex = ifr.ifr_ifindex; /* indice da interface pela qual os pacotes serao enviados */
+	addr[0]=0x00;
+	addr[0]=0x06;
+	addr[0]=0x5B;
+	addr[0]=0x28;
+	addr[0]=0xAE;
+	addr[0]=0x73;
+	memcpy (to.sll_addr, addr, 6);
+	len = sizeof(struct sockaddr_ll);
 
   while(escolha!=5) {
     printf("\n ################################################### ");
@@ -160,19 +133,22 @@ int main(int argc, char*argv[])
     scanf("%d",&escolha);
 
     switch(escolha) {
-        case 1: configuraPacote(1);
+        case 1: monta_pacote(1);
                 break;
-        case 2: configuraPacote(2);
+        case 2: monta_pacote(2);
                 break;
-        case 3: configuraPacote(3);
+        case 3: monta_pacote(3);
                 break;
-        case 4: configuraPacote(4);
+        case 4: monta_pacote(4);
                 break;
         case 5: printf("\nFinalizando ferramenta...\n\n");
                 exit(0);
         default: printf("\nOpção inválida!..\n\n");
                 break;
     }
+
+    if(sendto(sock, (char *) buff, sizeof(buff), 0, (struct sockaddr*) &to, len)<0)
+      printf("sendto maquina destino.\n");
 
   }
 }
