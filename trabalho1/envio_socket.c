@@ -13,6 +13,7 @@
 #include <linux/if_packet.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
+#include <netinet/tcp.h>
 
 #define DEFAULT_IF "eth0" // interface padrao se n for passada por parametro
 #define MY_DEST_MAC0 0x70
@@ -67,6 +68,7 @@ void monta_pacote(int opcao) {
   struct ether_header *eth;
   struct iphdr *ipv4;
   struct udphdr *udp;
+  struct tcphdr *tcp;
 
   // coloca o ponteiro do header ethernet apontando para a 1a. posicao do buffer
   // onde inicia o header do ethernet.
@@ -92,23 +94,24 @@ void monta_pacote(int opcao) {
 
   tamanhoPacote += sizeof(struct ether_header);
 
-  if(opcao == 1) {
-    // coloca o ponteiro do header ip apontando para a 14. posicao do buffer
-    // onde inicia o header do ip.
-    ipv4 = (struct iphdr*)&buff[14];
-    ipv4->ihl = 5;
-    ipv4->version = 4;
-    ipv4->tos = 16;
-    ipv4->id = htons(54321); //htons(rand());
-    ipv4->ttl = 64;
-    ipv4->protocol = 17; // UDP
-    ipv4->saddr = inet_addr(inet_ntoa(((struct sockaddr_in *)&if_ip.ifr_addr)->sin_addr)); // IP ORIGEM
-    ipv4->daddr = ipv4->saddr; // IP DESTINO inet_addr("192.168.25.19")
-    ipv4->check = 0;
-    ipv4->tot_len = htons(tamanhoPacote - sizeof(struct ether_header));
-    ipv4->check = in_cksum((unsigned short *)ipv4, sizeof(struct iphdr));;
-    tamanhoPacote += sizeof(struct iphdr);
+  // coloca o ponteiro do header ip apontando para a 14. posicao do buffer
+  // onde inicia o header do ip.
+  ipv4 = (struct iphdr*)&buff[14];
+  ipv4->ihl = 5;
+  ipv4->version = 4;
+  ipv4->tos = 16;
+  ipv4->id = htons(54321); //htons(rand());
+  ipv4->ttl = 64;
+  if(opcao == 1 || opcao == 3) {ipv4->protocol = 17;} // UDP
+  else {ipv4->protocol = 6;} //TCP
+  ipv4->saddr = inet_addr(inet_ntoa(((struct sockaddr_in *)&if_ip.ifr_addr)->sin_addr)); // IP ORIGEM
+  ipv4->daddr = ipv4->saddr; // IP DESTINO inet_addr("192.168.25.19")
+  ipv4->check = 0;
+  ipv4->tot_len = htons(tamanhoPacote - sizeof(struct ether_header));
+  ipv4->check = in_cksum((unsigned short *)ipv4, sizeof(struct iphdr));;
+  tamanhoPacote += sizeof(struct iphdr);
 
+  if(opcao == 1 || opcao == 3) {
 
     // coloca o ponteiro do header udp apontando para a 34. posicao do buffer
     // onde inicia o header do udp.
@@ -124,7 +127,26 @@ void monta_pacote(int opcao) {
     udp->check = 0;
 
   } else if(opcao == 2) {
-    printf("\n\nEntrou no IPv4 e TCP\n\n");
+
+    tcp = (struct tcphdr *) (buff + sizeof(struct iphdr) + sizeof(ether_header));
+    char *dataFrame = (char *) (buff + sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct tcphdr));
+    strcpy(dataFrame, dadosArquivo);
+    tcp->dest = htons(23452);
+    tcp->seq = 0;
+    tcp->ack_seq = 0;
+    tcp->fin = 0;
+    tcp->syn = 1;
+    tcp->rst = 0;
+    tcp->psh = 0;
+    tcp->ack = 0;
+    tcp->urg = 0;
+    tcp->check = 0;
+    tcp->window = htons(5840);
+    tcp->check = 0;
+    tcp->urg_ptr = 0;
+    tamanhoPacote += sizeof(struct tcphdr);
+    tamanhoPacote += strlen(dataFrame);
+
   } else if(opcao == 3) {
     printf("\n\nEntrou no IPv6 e UDP\n\n");
   } else {

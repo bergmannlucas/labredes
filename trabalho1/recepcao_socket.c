@@ -23,6 +23,7 @@
 
 #include <linux/ip.h>
 #include <netinet/udp.h>
+#include <netinet/tcp.h>
 
 #define BUFFSIZE 1518
 
@@ -36,10 +37,12 @@
   struct ifreq ifr;
   struct iphdr *ipv4;
   struct udphdr *udp;
+	struct tcphdr *tcp;
 
 int main(int argc,char *argv[])
 {
   int numBytes = 0;
+	int i;
   /* Criacao do socket. Todos os pacotes devem ser construidos a partir do protocolo Ethernet. */
   // De um "man" para ver os parametros.
   // htons: converte um short (2-byte) integer para standard network byte order.
@@ -79,14 +82,27 @@ int main(int argc,char *argv[])
 				printf("Checksum : %d\n", ipv4->check);
 				printf("Source address : %s\n", inet_ntoa(*(struct in_addr *)&ipv4->saddr));
 				printf("Destination address : %s\n\n", inet_ntoa(*(struct in_addr *)&ipv4->daddr));
-        udp = (struct udphdr*)&buff1[34];
-				printf("#####UDP##### \n");
-				printf("Source port : %d \n", udp->source);
-				printf("Destination port : %d \n", udp->dest);
-				printf("Length : %d \n", udp->len);
-        printf("Checksum : %d \n", udp->check);
-
-        int i=42;
+        if(ipv4->protocol == 17) {
+					udp = (struct udphdr*)&buff1[34];
+					printf("#####UDP##### \n");
+					printf("Source port : %d \n", udp->source);
+					printf("Destination port : %d \n", udp->dest);
+					printf("Length : %d \n", udp->len);
+        	printf("Checksum : %d \n", udp->check);
+					i=42;
+				} else {
+					tcp = (struct tcphdr*)&buff1[34];
+					printf("#####TCP##### \n");
+					printf("Source port: %d \n", tcp->source);
+					printf("Destination port: %d \n", tcp->dest);
+					printf("Sequence number: %d \n", tcp->seq);
+					printf("Acknowledgment number: %d \n", tcp->ack_seq);
+					printf("Window: %d \n", tcp->window);
+					printf("Checksum: %d \n", tcp->check);
+					printf("Urgent pointer: %d \n", tcp->urg_ptr);
+					i=54;
+				}
+				
         FILE *fp = fopen("saida.txt", "w");
         if (fp == NULL) {
            printf ("Houve um erro ao abrir o arquivo.\n");
