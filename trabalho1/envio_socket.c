@@ -1,32 +1,26 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
 #include <string.h>
+#include <unistd.h>
+#include <signal.h>
+#include <errno.h>
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <linux/if_ether.h>
-#include <netpacket/packet.h>
-#include <net/ethernet.h>
-#include <netinet/ether.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <linux/ip.h>
-#include <linux/udp.h>
 #include <net/if.h>
-#include <sys/ioctl.h>
-#include <stdint.h>
-
-#define ETHERTYPE_LEN 2
-#define MAC_ADDR_LEN 6
-#define BUFFER_LEN 1518
+#include <arpa/inet.h>
+#include <net/ethernet.h>
+#include <linux/if_packet.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
 
 #define DEFAULT_IF "eth0" // interface padrao se n for passada por parametro
-#define MY_DEST_MAC0 0xa4
-#define MY_DEST_MAC1 0x1f
-#define MY_DEST_MAC2 0x72
-#define MY_DEST_MAC3 0xf5
-#define MY_DEST_MAC4 0x90
-#define MY_DEST_MAC5 0x80
+#define MY_DEST_MAC0 0x70
+#define MY_DEST_MAC1 0x8b
+#define MY_DEST_MAC2 0xcd
+#define MY_DEST_MAC3 0xe5
+#define MY_DEST_MAC4 0x5d
+#define MY_DEST_MAC5 0x32
 
 // para filtrar no wireshark
 // eth.dst == 70:8b:cd:e5:5d:32 and eth.src == 70:8b:cd:e5:5d:32
@@ -34,51 +28,37 @@
 // Atencao!! Confira no /usr/include do seu sisop o nome correto
 // das estruturas de dados dos protocolos.
 
-//typedef unsigned char MacAddress[MAC_ADDR_LEN];
-//extern int errno;
 char ifName[IFNAMSIZ];
 unsigned char buff[1500];
 struct ifreq ifr;
+struct ifreq if_ip;
+char dadosArquivo[1460];
+int tamanhoPacote;
 
-// Função de checksum
-unsigned short checksum(unsigned short *buf, int nwords)
+// funcao de checksum que catei na net
+unsigned short in_cksum(unsigned short *addr,int len)
 {
-    //
+        register int sum = 0;
+        u_short answer = 0;
+        register u_short *w = addr;
+        register int nleft = len;
 
-    unsigned long sum;
+        while (nleft > 1)  {
+                sum += *w++;
+                nleft -= 2;
+        }
 
-    for(sum=0; nwords>0; nwords--)
-        sum += *buf++;
+        if (nleft == 1) {
+                *(u_char *)(&answer) = *(u_char *)w ;
+                sum += answer;
+        }
 
-    sum = (sum >> 16) + (sum &0xffff);
-
-    sum += (sum >> 16);
-
-    return (unsigned short)(~sum);
+        sum = (sum >> 16) + (sum & 0xffff);
+        sum += (sum >> 16);
+        answer = ~sum;
+        return(answer);
 }
 
-// Função de checksum para o UDP
-/*
-uint16_t check_udp_sum(uint8_t *buffer, int len)
-{
-    unsigned long sum = 0;
-    struct iphdr *tempI = (struct iphdr *)(buff);
-    struct udphdr *tempH = (struct udphdr *)(buff + sizeof(struct iphdr));
-    //struct dnsheader *tempD = (struct dnsheader *)(buff + sizeof(struct iphdr) + sizeof(struct udphdr));
-    tempH->check = 0;
-    sum = checksum( (uint16_t *)   & (tempI->saddr) , 8 );
-    sum += checksum((uint16_t *) tempH, len);
-
-    sum += ntohs(IPPROTO_UDP + len);
-
-
-    sum = (sum >> 16) + (sum & 0x0000ffff);
-    sum += (sum >> 16);
-
-    return (uint16_t)(~sum);
-
-}
-*/
 
 void monta_pacote(int opcao) {
   // as struct estao descritas nos seus arquivos .h
@@ -87,13 +67,11 @@ void monta_pacote(int opcao) {
   struct ether_header *eth;
   struct iphdr *ipv4;
   struct udphdr *udp;
-  int posicaoPContinuar;
-  int tamanhoPacote;
 
   // coloca o ponteiro do header ethernet apontando para a 1a. posicao do buffer
   // onde inicia o header do ethernet.
   eth = (struct ether_header *) &buff[0];
-
+  memset(buff, 0, 1500);
   //Endereco Mac Destino
   eth->ether_dhost[0] = MY_DEST_MAC0;
   eth->ether_dhost[1] = MY_DEST_MAC1;
@@ -111,40 +89,39 @@ void monta_pacote(int opcao) {
   eth->ether_shost[5] = MY_DEST_MAC5;
 
   eth->ether_type = htons(0X800);
-  
+
   tamanhoPacote += sizeof(struct ether_header);
 
   if(opcao == 1) {
     // coloca o ponteiro do header ip apontando para a 14. posicao do buffer
     // onde inicia o header do ip.
     ipv4 = (struct iphdr*)&buff[14];
-
+    ipv4->ihl = 5;
     ipv4->version = 4;
-    ipv4->ihl = 5; // IPv4
     ipv4->tos = 16;
-    ipv4->id = htons(rand());
-    ipv4->ttl = 110;
+    ipv4->id = htons(54321); //htons(rand());
+    ipv4->ttl = 64;
     ipv4->protocol = 17; // UDP
-    ipv4->saddr = inet_addr("10.32.143.178"); // IP ORIGEM
-    ipv4->daddr = inet_addr("10.32.143.178"); // IP DESTINO
-    tamanhoPacote += sizeof(struct iphdr);
+    ipv4->saddr = inet_addr(inet_ntoa(((struct sockaddr_in *)&if_ip.ifr_addr)->sin_addr)); // IP ORIGEM
+    ipv4->daddr = ipv4->saddr; // IP DESTINO inet_addr("192.168.25.19")
+    ipv4->check = 0;
     ipv4->tot_len = htons(tamanhoPacote - sizeof(struct ether_header));
+    ipv4->check = in_cksum((unsigned short *)ipv4, sizeof(struct iphdr));;
+    tamanhoPacote += sizeof(struct iphdr);
 
 
     // coloca o ponteiro do header udp apontando para a 34. posicao do buffer
     // onde inicia o header do udp.
-    udp = (struct udphdr *) &buff[34];
-    udp->source = htons(53);
-    udp->dest = htons(33333);
-    udp->len = htons(8); // Tá errado
+    udp = (struct udphdr *) (buff + sizeof(struct iphdr) + sizeof(struct ether_header));
+    char *dataFrame = (char *) (buff + sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct udphdr));
+    // Copia os dados do arquivo para o dataFrame
+    strcpy(dataFrame, dadosArquivo);
+    udp->source = htons(23451);
+    udp->dest = htons(23452);
     tamanhoPacote += sizeof(struct udphdr);
-    udp->len = htons(tamanhoPacote - sizeof(struct iphdr) - sizeof(struct ether_header));
-
-    
-    ipv4->check = checksum((unsigned short*)(buff + sizeof(struct ether_header)), (sizeof(struct iphdr)/2));
+    tamanhoPacote += strlen(dataFrame);
+    udp->len = htons(sizeof(struct udphdr) + strlen(dadosArquivo));
     udp->check = 0;
-
-    
 
   } else if(opcao == 2) {
     printf("\n\nEntrou no IPv4 e TCP\n\n");
@@ -153,9 +130,6 @@ void monta_pacote(int opcao) {
   } else {
     printf("\n\nEntrou no IPv6 e TCP\n\n");
   }
-
-  
-
 }
 
 int main(int argc, char*argv[])
@@ -175,7 +149,28 @@ int main(int argc, char*argv[])
   }
 
   // Inicializa com 0 os bytes de memoria apontados por ifr.
-	memset(&ifr, 0, sizeof(ifr));
+	(&ifr, 0, sizeof(ifr));
+
+  // Arquivo - Begin
+  char *buffer;
+  FILE *fp;
+  size_t size = 0;
+
+  fp = fopen("teste.txt", "r");
+  // Vai p/ final do arquivo
+  fseek(fp, 0, SEEK_END);
+  // Pega o tamanho do arquivo
+  size = ftell(fp);
+  // Volta p/ inicio do arquivo
+  rewind(fp);
+  // Aloca espaço no buffer com o tamanho do arquivo
+  buffer = malloc((size + 1) * sizeof(*buffer));
+  // le o arquivo até o fim
+  fread(buffer, size, 1, fp);
+  buffer[size] = '\0';
+  // Passa o conteudo do arquivo/buffer para variavel global dadosArquivo
+  strcpy(dadosArquivo, buffer);
+  // Arquivo - End
 
   // Criacao do socket. Uso do protocolo Ethernet em todos os pacotes. De um "man" para ver os parametros.
   // htons: converte um short (2-byte) integer para standard network byte order.
@@ -185,15 +180,22 @@ int main(int argc, char*argv[])
  	}
 
   // Pega o index da interface
-  memset(&ifr, 0, sizeof(struct ifreq));
+  //memset(&ifr, 0, sizeof(struct ifreq));
   strncpy(ifr.ifr_name, ifName, IFNAMSIZ-1);
   if(ioctl(sock, SIOCGIFINDEX, &ifr) < 0)
     perror("SIOCGIFINDEX");
 
-  /* Identicacao de qual maquina (MAC) deve receber a mensagem enviada no socket. */
+  // Para pegar o IP da maquina destino e origem! no monta_pacote()
+  memset(&if_ip, 0, sizeof(struct ifreq));
+  strncpy(if_ip.ifr_name, ifName, IFNAMSIZ-1);
+  if (ioctl(sock, SIOCGIFADDR, &if_ip) < 0)
+    perror("SIOCGIFADDR");
+
+
+  // Identicacao de qual maquina (MAC) deve receber a mensagem enviada no socket.
 	to.sll_protocol= htons(ETH_P_ALL);
-	to.sll_ifindex = ifr.ifr_ifindex; /* indice da interface pela qual os pacotes serao enviados */
-  //to.sll_halen = 6;
+	to.sll_ifindex = ifr.ifr_ifindex; // indice da interface pela qual os pacotes serao enviados
+  to.sll_halen = 6;
 	addr[0]=MY_DEST_MAC0;
 	addr[0]=MY_DEST_MAC1;
 	addr[0]=MY_DEST_MAC2;
@@ -203,34 +205,32 @@ int main(int argc, char*argv[])
 	memcpy (to.sll_addr, addr, 6);
 	len = sizeof(struct sockaddr_ll);
 
-  while(escolha!=5) {
-    printf("\n ################################################### ");
-    printf("\nTrabalho 1 LAB-REDES");
-    printf("\n 1 - Enviar utilizando IPv4 e UDP ");
-    printf("\n 2 - Enviar utilizando IPv4 e TCP ");
-    printf("\n 3 - Enviar utilizando IPv6 e UDP ");
-    printf("\n 4 - Enviar utilizando IPv6 e TCP ");
-    printf("\n 5 - Fechar Programa ");
-    printf("\n\n Escolha uma opcao: ");
-    scanf("%d",&escolha);
+  printf("\n ################################################### ");
+  printf("\nTrabalho 1 LAB-REDES");
+  printf("\n 1 - Enviar utilizando IPv4 e UDP ");
+  printf("\n 2 - Enviar utilizando IPv4 e TCP ");
+  printf("\n 3 - Enviar utilizando IPv6 e UDP ");
+  printf("\n 4 - Enviar utilizando IPv6 e TCP ");
+  printf("\n 5 - Fechar Programa ");
+  printf("\n\n Escolha uma opcao: ");
+  scanf("%d",&escolha);
 
-    switch(escolha) {
-        case 1: monta_pacote(1);
-                break;
-        case 2: monta_pacote(2);
-                break;
-        case 3: monta_pacote(3);
-                break;
-        case 4: monta_pacote(4);
-                break;
-        case 5: printf("\nFinalizando ferramenta...\n\n");
-                exit(0);
-        default: printf("\nOpção inválida!..\n\n");
-                break;
-    }
+  switch(escolha) {
+      case 1: monta_pacote(1);
+              break;
+      case 2: monta_pacote(2);
+              break;
+      case 3: monta_pacote(3);
+              break;
+      case 4: monta_pacote(4);
+              break;
+      case 5: printf("\nFinalizando ferramenta...\n\n");
+              exit(0);
+      default: printf("\nOpção inválida!..\n\n");
+              break;
+  }
 
-    if(sendto(sock, (char *) buff, sizeof(buff), 0, (struct sockaddr*) &to, len)<0)
-      printf("sendto maquina destino.\n");
-
+  if(sendto(sock, (char *) buff, tamanhoPacote, 0, (struct sockaddr*) &to, len)<0) {
+    printf("sendto maquina destino.\n");
   }
 }
