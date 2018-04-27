@@ -26,6 +26,8 @@
 // para filtrar no wireshark
 // eth.dst == 70:8b:cd:e5:5d:32 and eth.src == 70:8b:cd:e5:5d:32
 
+// tamanho limite do arquivo 1471 bytes, a partir dai fragmentacao!
+
 // Atencao!! Confira no /usr/include do seu sisop o nome correto
 // das estruturas de dados dos protocolos.
 
@@ -36,7 +38,10 @@ struct ifreq if_ip;
 char dadosArquivo[1460];
 int tamanhoPacote;
 
-// funcao de checksum que catei na net
+/*
+ * in_cksum --
+ *      Checksum routine for Internet Protocol family headers (C Version)
+ */
 unsigned short in_cksum(unsigned short *addr,int len)
 {
         register int sum = 0;
@@ -44,19 +49,26 @@ unsigned short in_cksum(unsigned short *addr,int len)
         register u_short *w = addr;
         register int nleft = len;
 
+        /*
+         * Our algorithm is simple, using a 32 bit accumulator (sum), we add
+         * sequential 16 bit words to it, and at the end, fold back all the
+         * carry bits from the top 16 bits into the lower 16 bits.
+         */
         while (nleft > 1)  {
                 sum += *w++;
                 nleft -= 2;
         }
 
+        /* mop up an odd byte, if necessary */
         if (nleft == 1) {
                 *(u_char *)(&answer) = *(u_char *)w ;
                 sum += answer;
         }
 
-        sum = (sum >> 16) + (sum & 0xffff);
-        sum += (sum >> 16);
-        answer = ~sum;
+        /* add back carry outs from top 16 bits to low 16 bits */
+        sum = (sum >> 16) + (sum & 0xffff);     /* add hi 16 to low 16 */
+        sum += (sum >> 16);                     /* add carry */
+        answer = ~sum;                          /* truncate to 16 bits */
         return(answer);
 }
 
@@ -127,8 +139,8 @@ void monta_pacote(int opcao) {
     udp->check = 0;
 
   } else if(opcao == 2) {
-
-    tcp = (struct tcphdr *) (buff + sizeof(struct iphdr) + sizeof(ether_header));
+    /*
+    tcp = (struct tcphdr *) (buff + sizeof(struct iphdr) + sizeof(struct ether_header));
     char *dataFrame = (char *) (buff + sizeof(struct ether_header) + sizeof(struct iphdr) + sizeof(struct tcphdr));
     strcpy(dataFrame, dadosArquivo);
     tcp->dest = htons(23452);
@@ -146,11 +158,16 @@ void monta_pacote(int opcao) {
     tcp->urg_ptr = 0;
     tamanhoPacote += sizeof(struct tcphdr);
     tamanhoPacote += strlen(dataFrame);
+    */
+    printf("Função desabilitada!\n\n");
+    exit(1);
 
   } else if(opcao == 3) {
-    printf("\n\nEntrou no IPv6 e UDP\n\n");
+    printf("Função desabilitada!\n\n");
+    exit(1);
   } else {
-    printf("\n\nEntrou no IPv6 e TCP\n\n");
+    printf("Função desabilitada!\n\n");
+    exit(1);
   }
 }
 
